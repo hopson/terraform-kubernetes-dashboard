@@ -1,58 +1,58 @@
 variable "k8s_dashboard_ver" {
   description = "Version of Kubernetes dashboard to deploy"
-  type        = "string"
+  type        = string
   default     = "1.10.1"
 }
 
-variable minimal_role_name {
+variable "minimal_role_name" {
   description = "Name of limited permissions role"
-  type        = "string"
+  type        = string
   default     = "kubernetes-dashboard-minimal"
 }
 
 variable "name" {
   description = "Name of deployed service"
-  type        = "string"
+  type        = string
   default     = "kubernetes-dashboard"
 }
 
 variable "app_name" {
   description = "Value of k8s-app label"
-  type        = "string"
+  type        = string
   default     = "kubernetes-dashboard"
 }
 
 variable "namespace" {
   description = "Target namespace to deploy"
-  type        = "string"
+  type        = string
   default     = "kube-system"
 }
 
 variable "revision_history_limit" {
   description = "Revision history limit"
-  type        = "string"
+  type        = string
   default     = "10"
 }
 
 variable "replicas" {
   description = "Number of replicas"
-  type        = "string"
+  type        = string
   default     = "1"
 }
 
 variable "depends_on" {
   default     = []
   description = "Workaround for module dependency"
-  type        = "list"
+  type        = list(string)
 }
 
 resource "kubernetes_secret" "dashboard" {
   metadata {
     name      = "kubernetes-dashboard-certs"
-    namespace = "${var.namespace}"
+    namespace = var.namespace
 
-    labels {
-      "k8s-app" = "${var.app_name}"
+    labels = {
+      "k8s-app" = var.app_name
     }
   }
 
@@ -61,8 +61,8 @@ resource "kubernetes_secret" "dashboard" {
 
 resource "kubernetes_role" "dashboard-minimal" {
   metadata {
-    name      = "${var.minimal_role_name}"
-    namespace = "${var.namespace}"
+    name      = var.minimal_role_name
+    namespace = var.namespace
   }
 
   rule {
@@ -108,10 +108,10 @@ resource "kubernetes_role" "dashboard-minimal" {
 
 resource "kubernetes_cluster_role_binding" "dashboard" {
   metadata {
-    name = "${var.name}"
+    name = var.name
 
-    labels {
-      "k8s-app" = "${var.app_name}"
+    labels = {
+      "k8s-app" = var.app_name
     }
   }
 
@@ -123,91 +123,90 @@ resource "kubernetes_cluster_role_binding" "dashboard" {
 
   subject {
     kind      = "ServiceAccount"
-    name      = "${var.name}"
-    namespace = "${var.namespace}"
+    name      = var.name
+    namespace = var.namespace
     api_group = ""
   }
 }
 
 resource "kubernetes_service_account" "dashboard" {
   metadata {
-    name      = "${var.name}"
-    namespace = "${var.namespace}"
+    name      = var.name
+    namespace = var.namespace
 
-    labels {
-      "k8s-app" = "${var.app_name}"
+    labels = {
+      "k8s-app" = var.app_name
     }
   }
 }
 
 resource "kubernetes_role_binding" "dashboard" {
   metadata {
-    name      = "${var.minimal_role_name}"
-    namespace = "${var.namespace}"
+    name      = var.minimal_role_name
+    namespace = var.namespace
   }
 
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "Role"
-    name      = "${var.minimal_role_name}"
+    name      = var.minimal_role_name
   }
 
   subject {
     kind      = "ServiceAccount"
-    name      = "${var.name}"
-    namespace = "${var.namespace}"
+    name      = var.name
+    namespace = var.namespace
     api_group = ""
   }
 }
 
 resource "kubernetes_deployment" "dashboard" {
   metadata {
-    name      = "${var.name}"
-    namespace = "${var.namespace}"
+    name      = var.name
+    namespace = var.namespace
 
-    labels {
-      "k8s-app" = "${var.app_name}"
+    labels = {
+      "k8s-app" = var.app_name
     }
   }
 
   spec {
-    replicas               = "${var.replicas}"
-    revision_history_limit = "${var.revision_history_limit}"
+    replicas               = var.replicas
+    revision_history_limit = var.revision_history_limit
 
     selector {
-      match_labels {
-        "k8s-app" = "${var.app_name}"
+      match_labels = {
+        "k8s-app" = var.app_name
       }
     }
 
     template {
       metadata {
-        labels {
-          "k8s-app" = "${var.app_name}"
+        labels = {
+          "k8s-app" = var.app_name
         }
       }
 
       spec {
         service_account_name = "kubernetes-dashboard"
 
-        volume = [{
+        volume {
           name = "kubernetes-dashboard-certs"
 
-          secret = {
+          secret {
             secret_name = "kubernetes-dashboard-certs"
           }
-        },
-          {
-            name = "${kubernetes_service_account.dashboard.default_secret_name}"
+        }
+        volume {
+          name = kubernetes_service_account.dashboard.default_secret_name
 
-            secret = {
-              secret_name = "${kubernetes_service_account.dashboard.default_secret_name}"
-            }
-          },
-          {
-            name = "tmp-volume"
-          },
-        ]
+          secret {
+            secret_name = kubernetes_service_account.dashboard.default_secret_name
+          }
+        }
+        volume {
+          name = "tmp-volume"
+        }
 
         container {
           name  = "kubernetes-dashboard"
@@ -231,20 +230,19 @@ resource "kubernetes_deployment" "dashboard" {
             }
           }
 
-          volume_mount = [{
+          volume_mount {
             name       = "kubernetes-dashboard-certs"
             mount_path = "/certs"
-          },
-            {
-              name       = "tmp-volume"
-              mount_path = "/tmp"
-            },
-            {
-              name       = "${kubernetes_service_account.dashboard.default_secret_name}"
-              read_only  = true
-              mount_path = "/var/run/secrets/kubernetes.io/serviceaccount"
-            },
-          ]
+          }
+          volume_mount {
+            name       = "tmp-volume"
+            mount_path = "/tmp"
+          }
+          volume_mount {
+            name       = kubernetes_service_account.dashboard.default_secret_name
+            read_only  = true
+            mount_path = "/var/run/secrets/kubernetes.io/serviceaccount"
+          }
         }
       }
     }
@@ -253,16 +251,16 @@ resource "kubernetes_deployment" "dashboard" {
 
 resource "kubernetes_service" "dashboard" {
   metadata {
-    name      = "${var.name}"
-    namespace = "${var.namespace}"
+    name      = var.name
+    namespace = var.namespace
 
-    labels {
-      "k8s-app" = "${var.app_name}"
+    labels = {
+      "k8s-app" = var.app_name
     }
   }
 
   spec {
-    selector {
+    selector = {
       "k8s-app" = "kubernetes-dashboard"
     }
 
@@ -272,3 +270,4 @@ resource "kubernetes_service" "dashboard" {
     }
   }
 }
+
